@@ -8,6 +8,7 @@
 
 - [Requirements](#requirements)
 - [Quick Start (All Platforms)](#quick-start-all-platforms)
+- [Launch Scripts](#-launch-scripts)
 - [Windows Portable Package](#-windows-portable-package)
 - [AMD / ROCm GPUs](#amd--rocm-gpus)
 - [Intel GPUs](#intel-gpus)
@@ -75,6 +76,204 @@ python acestep/api_server.py                     # REST API
 ```
 
 > Models are downloaded automatically on first run. Open http://localhost:7860 (Gradio) or http://localhost:8001 (API).
+
+---
+
+## 🚀 Launch Scripts
+
+Ready-to-use launch scripts for all platforms. These scripts handle environment detection, dependency installation, and application startup automatically. All scripts check for updates on startup by default (configurable).
+
+### Available Scripts
+
+| Platform | Script | Description |
+|----------|--------|-------------|
+| **Windows** | `start_gradio_ui.bat` | Launch Gradio Web UI (CUDA) |
+| **Windows** | `start_api_server.bat` | Launch REST API Server (CUDA) |
+| **Windows** | `start_gradio_ui_rocm.bat` | Launch Gradio Web UI (AMD ROCm) |
+| **Windows** | `start_api_server_rocm.bat` | Launch REST API Server (AMD ROCm) |
+| **Linux** | `start_gradio_ui.sh` | Launch Gradio Web UI (CUDA) |
+| **Linux** | `start_api_server.sh` | Launch REST API Server (CUDA) |
+| **macOS** | `start_gradio_ui_macos.sh` | Launch Gradio Web UI (MLX) |
+| **macOS** | `start_api_server_macos.sh` | Launch REST API Server (MLX) |
+
+### Windows
+
+```bash
+# Launch Gradio Web UI (NVIDIA CUDA)
+start_gradio_ui.bat
+
+# Launch REST API Server (NVIDIA CUDA)
+start_api_server.bat
+
+# Launch Gradio Web UI (AMD ROCm)
+start_gradio_ui_rocm.bat
+
+# Launch REST API Server (AMD ROCm)
+start_api_server_rocm.bat
+```
+
+> **ROCm users:** The ROCm scripts (`start_gradio_ui_rocm.bat`, `start_api_server_rocm.bat`) auto-set `HSA_OVERRIDE_GFX_VERSION`, `ACESTEP_LM_BACKEND=pt`, `MIOPEN_FIND_MODE=FAST` and other ROCm-specific environment variables. They use a separate `venv_rocm` virtual environment to avoid CUDA/ROCm wheel conflicts.
+
+### Linux
+
+```bash
+# Make executable (first time only)
+chmod +x start_gradio_ui.sh start_api_server.sh
+
+# Launch Gradio Web UI
+./start_gradio_ui.sh
+
+# Launch REST API Server
+./start_api_server.sh
+```
+
+> **Note:** Git must be installed via your system package manager (`sudo apt install git`, `sudo yum install git`, `sudo pacman -S git`).
+
+### macOS (Apple Silicon / MLX)
+
+macOS scripts use the **MLX backend** for native Apple Silicon acceleration (M1/M2/M3/M4).
+
+```bash
+# Make executable (first time only)
+chmod +x start_gradio_ui_macos.sh start_api_server_macos.sh
+
+# Launch Gradio Web UI with MLX backend
+./start_gradio_ui_macos.sh
+
+# Launch REST API Server with MLX backend
+./start_api_server_macos.sh
+```
+
+The macOS scripts automatically set `ACESTEP_LM_BACKEND=mlx` and `--backend mlx` for native Apple Silicon acceleration, and fall back to PyTorch backend on non-arm64 machines.
+
+> **Note:** Install git via `xcode-select --install` or `brew install git`.
+
+### Script Features
+
+- Startup update check (enabled by default, configurable)
+- Auto environment detection (portable Python or uv)
+- Auto install `uv` if needed
+- Configurable download source (HuggingFace/ModelScope)
+- Customizable models and parameters
+
+### How to Modify Configuration
+
+All configurable options are defined as variables at the top of each script. To customize, open the script with a text editor and modify the variable values.
+
+**Example: Change UI language to Chinese and use the 1.7B LM model**
+
+<table>
+<tr><th>Windows (.bat)</th><th>Linux / macOS (.sh)</th></tr>
+<tr><td>
+
+Find these lines in `start_gradio_ui.bat`:
+```batch
+set LANGUAGE=en
+set LM_MODEL_PATH=--lm_model_path acestep-5Hz-lm-0.6B
+```
+Change to:
+```batch
+set LANGUAGE=zh
+set LM_MODEL_PATH=--lm_model_path acestep-5Hz-lm-1.7B
+```
+
+</td><td>
+
+Find these lines in `start_gradio_ui.sh`:
+```bash
+LANGUAGE="en"
+LM_MODEL_PATH="--lm_model_path acestep-5Hz-lm-0.6B"
+```
+Change to:
+```bash
+LANGUAGE="zh"
+LM_MODEL_PATH="--lm_model_path acestep-5Hz-lm-1.7B"
+```
+
+</td></tr>
+</table>
+
+**Example: Disable startup update check**
+
+<table>
+<tr><th>Windows (.bat)</th><th>Linux / macOS (.sh)</th></tr>
+<tr><td>
+
+```batch
+REM set CHECK_UPDATE=true
+set CHECK_UPDATE=false
+```
+
+</td><td>
+
+```bash
+# CHECK_UPDATE="true"
+CHECK_UPDATE="false"
+```
+
+</td></tr>
+</table>
+
+**Example: Enable a commented-out option** — remove the comment prefix (`REM` for .bat, `#` for .sh):
+
+<table>
+<tr><th>Windows (.bat)</th><th>Linux / macOS (.sh)</th></tr>
+<tr><td>
+
+Before:
+```batch
+REM set SHARE=--share
+```
+After:
+```batch
+set SHARE=--share
+```
+
+</td><td>
+
+Before:
+```bash
+# SHARE="--share"
+```
+After:
+```bash
+SHARE="--share"
+```
+
+</td></tr>
+</table>
+
+**Common configurable options:**
+
+| Option | Gradio UI | API Server | Description |
+|--------|:---------:|:----------:|-------------|
+| `LANGUAGE` | ✅ | — | UI language: `en`, `zh`, `he`, `ja` |
+| `PORT` | ✅ | ✅ | Server port (default: 7860 / 8001) |
+| `SERVER_NAME` / `HOST` | ✅ | ✅ | Bind address (`127.0.0.1` or `0.0.0.0`) |
+| `CHECK_UPDATE` | ✅ | ✅ | Startup update check (`true` / `false`) |
+| `CONFIG_PATH` | ✅ | — | DiT model (`acestep-v15-turbo`, etc.) |
+| `LM_MODEL_PATH` | ✅ | ✅ | LM model (`acestep-5Hz-lm-0.6B` / `1.7B` / `4B`) |
+| `DOWNLOAD_SOURCE` | ✅ | ✅ | Download source (`huggingface` / `modelscope`) |
+| `SHARE` | ✅ | — | Create public Gradio link |
+| `INIT_LLM` | ✅ | — | Force LLM on/off (`true` / `false` / `auto`) |
+| `OFFLOAD_TO_CPU` | ✅ | — | CPU offload for low-VRAM GPUs |
+
+### Update & Maintenance Tools
+
+| Script (Windows) | Script (Linux/macOS) | Purpose |
+|-------------------|----------------------|---------|
+| `check_update.bat` | `check_update.sh` | Check and update from GitHub |
+| `merge_config.bat` | `merge_config.sh` | Merge backed-up configurations after update |
+| `install_uv.bat` | `install_uv.sh` | Install uv package manager |
+| `quick_test.bat` | `quick_test.sh` | Test environment setup |
+
+**Update workflow:**
+
+```bash
+# Windows                          # Linux / macOS
+check_update.bat                    ./check_update.sh
+merge_config.bat                    ./merge_config.sh
+```
 
 ---
 
@@ -193,7 +392,7 @@ If you see "No GPU detected, running on CPU" with an AMD GPU:
 | RX 7800 XT, RX 7700 XT | `export HSA_OVERRIDE_GFX_VERSION=11.0.1` |
 | RX 7600 | `export HSA_OVERRIDE_GFX_VERSION=11.0.2` |
 
-3. On Windows, use `start_gradio_ui_rocm.bat` which sets required environment variables automatically.
+3. On Windows, use `start_gradio_ui_rocm.bat` / `start_api_server_rocm.bat` which set required environment variables automatically.
 4. Verify ROCm installation: `rocm-smi` should list your GPU.
 
 ### Linux (cachy-os / RDNA4)

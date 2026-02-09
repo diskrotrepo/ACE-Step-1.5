@@ -8,6 +8,7 @@
 
 - [動作要件](#動作要件)
 - [クイックスタート（全プラットフォーム）](#クイックスタート全プラットフォーム)
+- [起動スクリプト](#-起動スクリプト)
 - [Windows ポータブルパッケージ](#-windows-ポータブルパッケージ)
 - [AMD / ROCm GPU](#amd--rocm-gpu)
 - [Intel GPU](#intel-gpu)
@@ -75,6 +76,204 @@ python acestep/api_server.py                     # REST API
 ```
 
 > 初回実行時にモデルが自動ダウンロードされます。http://localhost:7860（Gradio）または http://localhost:8001（API）を開いてください。
+
+---
+
+## 🚀 起動スクリプト
+
+全プラットフォーム対応のすぐに使える起動スクリプトです。これらのスクリプトは環境検出、依存関係のインストール、アプリケーションの起動を自動的に処理します。すべてのスクリプトはデフォルトで起動時に更新チェックを行います（設定変更可能）。
+
+### 利用可能なスクリプト
+
+| プラットフォーム | スクリプト | 説明 |
+|----------|--------|------|
+| **Windows** | `start_gradio_ui.bat` | Gradio Web UI を起動（CUDA） |
+| **Windows** | `start_api_server.bat` | REST API サーバーを起動（CUDA） |
+| **Windows** | `start_gradio_ui_rocm.bat` | Gradio Web UI を起動（AMD ROCm） |
+| **Windows** | `start_api_server_rocm.bat` | REST API サーバーを起動（AMD ROCm） |
+| **Linux** | `start_gradio_ui.sh` | Gradio Web UI を起動（CUDA） |
+| **Linux** | `start_api_server.sh` | REST API サーバーを起動（CUDA） |
+| **macOS** | `start_gradio_ui_macos.sh` | Gradio Web UI を起動（MLX） |
+| **macOS** | `start_api_server_macos.sh` | REST API サーバーを起動（MLX） |
+
+### Windows
+
+```bash
+# Gradio Web UI を起動（NVIDIA CUDA）
+start_gradio_ui.bat
+
+# REST API サーバーを起動（NVIDIA CUDA）
+start_api_server.bat
+
+# Gradio Web UI を起動（AMD ROCm）
+start_gradio_ui_rocm.bat
+
+# REST API サーバーを起動（AMD ROCm）
+start_api_server_rocm.bat
+```
+
+> **ROCm ユーザー：** ROCm スクリプト（`start_gradio_ui_rocm.bat`、`start_api_server_rocm.bat`）は `HSA_OVERRIDE_GFX_VERSION`、`ACESTEP_LM_BACKEND=pt`、`MIOPEN_FIND_MODE=FAST` およびその他の ROCm 固有の環境変数を自動設定します。CUDA/ROCm wheel の競合を避けるため、別の `venv_rocm` 仮想環境を使用します。
+
+### Linux
+
+```bash
+# 実行権限を付与（初回のみ）
+chmod +x start_gradio_ui.sh start_api_server.sh
+
+# Gradio Web UI を起動
+./start_gradio_ui.sh
+
+# REST API サーバーを起動
+./start_api_server.sh
+```
+
+> **注意：** Git はシステムのパッケージマネージャーでインストールする必要があります（`sudo apt install git`、`sudo yum install git`、`sudo pacman -S git`）。
+
+### macOS（Apple Silicon / MLX）
+
+macOS スクリプトはネイティブの Apple Silicon アクセラレーション（M1/M2/M3/M4）のために **MLX バックエンド**を使用します。
+
+```bash
+# 実行権限を付与（初回のみ）
+chmod +x start_gradio_ui_macos.sh start_api_server_macos.sh
+
+# MLX バックエンドで Gradio Web UI を起動
+./start_gradio_ui_macos.sh
+
+# MLX バックエンドで REST API サーバーを起動
+./start_api_server_macos.sh
+```
+
+macOS スクリプトはネイティブの Apple Silicon アクセラレーションのために `ACESTEP_LM_BACKEND=mlx` と `--backend mlx` を自動設定し、非 arm64 マシンでは PyTorch バックエンドにフォールバックします。
+
+> **注意：** Git は `xcode-select --install` または `brew install git` でインストールしてください。
+
+### スクリプトの機能
+
+- 起動時の更新チェック（デフォルトで有効、設定変更可能）
+- 自動環境検出（ポータブル Python または uv）
+- 必要に応じて `uv` を自動インストール
+- ダウンロードソースの設定（HuggingFace/ModelScope）
+- モデルとパラメータのカスタマイズ
+
+### 設定の変更方法
+
+すべての設定可能なオプションは、各スクリプトの先頭で変数として定義されています。カスタマイズするには、テキストエディタでスクリプトを開き、変数の値を変更してください。
+
+**例：UI 言語を中国語に変更し、1.7B LM モデルを使用する**
+
+<table>
+<tr><th>Windows (.bat)</th><th>Linux / macOS (.sh)</th></tr>
+<tr><td>
+
+`start_gradio_ui.bat` で以下の行を見つけます：
+```batch
+set LANGUAGE=en
+set LM_MODEL_PATH=--lm_model_path acestep-5Hz-lm-0.6B
+```
+以下のように変更します：
+```batch
+set LANGUAGE=zh
+set LM_MODEL_PATH=--lm_model_path acestep-5Hz-lm-1.7B
+```
+
+</td><td>
+
+`start_gradio_ui.sh` で以下の行を見つけます：
+```bash
+LANGUAGE="en"
+LM_MODEL_PATH="--lm_model_path acestep-5Hz-lm-0.6B"
+```
+以下のように変更します：
+```bash
+LANGUAGE="zh"
+LM_MODEL_PATH="--lm_model_path acestep-5Hz-lm-1.7B"
+```
+
+</td></tr>
+</table>
+
+**例：起動時の更新チェックを無効にする**
+
+<table>
+<tr><th>Windows (.bat)</th><th>Linux / macOS (.sh)</th></tr>
+<tr><td>
+
+```batch
+REM set CHECK_UPDATE=true
+set CHECK_UPDATE=false
+```
+
+</td><td>
+
+```bash
+# CHECK_UPDATE="true"
+CHECK_UPDATE="false"
+```
+
+</td></tr>
+</table>
+
+**例：コメントアウトされたオプションを有効にする** — コメントプレフィックス（.bat は `REM`、.sh は `#`）を削除します：
+
+<table>
+<tr><th>Windows (.bat)</th><th>Linux / macOS (.sh)</th></tr>
+<tr><td>
+
+変更前：
+```batch
+REM set SHARE=--share
+```
+変更後：
+```batch
+set SHARE=--share
+```
+
+</td><td>
+
+変更前：
+```bash
+# SHARE="--share"
+```
+変更後：
+```bash
+SHARE="--share"
+```
+
+</td></tr>
+</table>
+
+**主な設定可能オプション：**
+
+| オプション | Gradio UI | API サーバー | 説明 |
+|--------|:---------:|:----------:|------|
+| `LANGUAGE` | ✅ | — | UI 言語：`en`、`zh`、`he`、`ja` |
+| `PORT` | ✅ | ✅ | サーバーポート（デフォルト：7860 / 8001） |
+| `SERVER_NAME` / `HOST` | ✅ | ✅ | バインドアドレス（`127.0.0.1` または `0.0.0.0`） |
+| `CHECK_UPDATE` | ✅ | ✅ | 起動時の更新チェック（`true` / `false`） |
+| `CONFIG_PATH` | ✅ | — | DiT モデル（`acestep-v15-turbo` など） |
+| `LM_MODEL_PATH` | ✅ | ✅ | LM モデル（`acestep-5Hz-lm-0.6B` / `1.7B` / `4B`） |
+| `DOWNLOAD_SOURCE` | ✅ | ✅ | ダウンロードソース（`huggingface` / `modelscope`） |
+| `SHARE` | ✅ | — | 公開 Gradio リンクを作成 |
+| `INIT_LLM` | ✅ | — | LLM の強制オン/オフ（`true` / `false` / `auto`） |
+| `OFFLOAD_TO_CPU` | ✅ | — | 低 VRAM GPU 向け CPU オフロード |
+
+### 更新 & メンテナンスツール
+
+| スクリプト（Windows） | スクリプト（Linux/macOS） | 用途 |
+|-------------------|----------------------|------|
+| `check_update.bat` | `check_update.sh` | GitHub から更新をチェック |
+| `merge_config.bat` | `merge_config.sh` | 更新後にバックアップされた設定をマージ |
+| `install_uv.bat` | `install_uv.sh` | uv パッケージマネージャーをインストール |
+| `quick_test.bat` | `quick_test.sh` | 環境セットアップをテスト |
+
+**更新ワークフロー：**
+
+```bash
+# Windows                          # Linux / macOS
+check_update.bat                    ./check_update.sh
+merge_config.bat                    ./merge_config.sh
+```
 
 ---
 
@@ -159,7 +358,7 @@ python -m acestep.acestep_v15_pipeline --port 7680
 | RX 7800 XT, RX 7700 XT | `export HSA_OVERRIDE_GFX_VERSION=11.0.1` |
 | RX 7600 | `export HSA_OVERRIDE_GFX_VERSION=11.0.2` |
 
-3. Windows では `start_gradio_ui_rocm.bat` を使用
+3. Windows では `start_gradio_ui_rocm.bat` / `start_api_server_rocm.bat` を使用
 4. ROCm インストールを確認：`rocm-smi`
 
 ### Linux（cachy-os / RDNA4）

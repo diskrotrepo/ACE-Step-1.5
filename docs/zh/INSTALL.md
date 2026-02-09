@@ -8,6 +8,7 @@
 
 - [环境要求](#环境要求)
 - [快速开始（全平台）](#快速开始全平台)
+- [启动脚本](#-启动脚本)
 - [Windows 便携包](#-windows-便携包)
 - [AMD / ROCm 显卡](#amd--rocm-显卡)
 - [Intel 显卡](#intel-显卡)
@@ -75,6 +76,204 @@ python acestep/api_server.py                     # REST API
 ```
 
 > 首次运行时模型会自动下载。打开 http://localhost:7860（Gradio）或 http://localhost:8001（API）。
+
+---
+
+## 🚀 启动脚本
+
+为所有平台提供开箱即用的启动脚本。这些脚本会自动处理环境检测、依赖安装和应用启动。所有脚本默认在启动时检查更新（可配置）。
+
+### 可用脚本
+
+| 平台 | 脚本 | 说明 |
+|------|------|------|
+| **Windows** | `start_gradio_ui.bat` | 启动 Gradio 网页界面（CUDA） |
+| **Windows** | `start_api_server.bat` | 启动 REST API 服务器（CUDA） |
+| **Windows** | `start_gradio_ui_rocm.bat` | 启动 Gradio 网页界面（AMD ROCm） |
+| **Windows** | `start_api_server_rocm.bat` | 启动 REST API 服务器（AMD ROCm） |
+| **Linux** | `start_gradio_ui.sh` | 启动 Gradio 网页界面（CUDA） |
+| **Linux** | `start_api_server.sh` | 启动 REST API 服务器（CUDA） |
+| **macOS** | `start_gradio_ui_macos.sh` | 启动 Gradio 网页界面（MLX） |
+| **macOS** | `start_api_server_macos.sh` | 启动 REST API 服务器（MLX） |
+
+### Windows
+
+```bash
+# 启动 Gradio 网页界面（NVIDIA CUDA）
+start_gradio_ui.bat
+
+# 启动 REST API 服务器（NVIDIA CUDA）
+start_api_server.bat
+
+# 启动 Gradio 网页界面（AMD ROCm）
+start_gradio_ui_rocm.bat
+
+# 启动 REST API 服务器（AMD ROCm）
+start_api_server_rocm.bat
+```
+
+> **ROCm 用户：** ROCm 脚本（`start_gradio_ui_rocm.bat`、`start_api_server_rocm.bat`）会自动设置 `HSA_OVERRIDE_GFX_VERSION`、`ACESTEP_LM_BACKEND=pt`、`MIOPEN_FIND_MODE=FAST` 及其他 ROCm 相关环境变量。这些脚本使用独立的 `venv_rocm` 虚拟环境，以避免 CUDA/ROCm wheel 冲突。
+
+### Linux
+
+```bash
+# 首次使用需添加执行权限
+chmod +x start_gradio_ui.sh start_api_server.sh
+
+# 启动 Gradio 网页界面
+./start_gradio_ui.sh
+
+# 启动 REST API 服务器
+./start_api_server.sh
+```
+
+> **注意：** 需要通过系统包管理器安装 Git（`sudo apt install git`、`sudo yum install git`、`sudo pacman -S git`）。
+
+### macOS（Apple Silicon / MLX）
+
+macOS 脚本使用 **MLX 后端**，提供原生 Apple Silicon 加速（M1/M2/M3/M4）。
+
+```bash
+# 首次使用需添加执行权限
+chmod +x start_gradio_ui_macos.sh start_api_server_macos.sh
+
+# 启动 Gradio 网页界面（MLX 后端）
+./start_gradio_ui_macos.sh
+
+# 启动 REST API 服务器（MLX 后端）
+./start_api_server_macos.sh
+```
+
+macOS 脚本会自动设置 `ACESTEP_LM_BACKEND=mlx` 和 `--backend mlx` 以启用原生 Apple Silicon 加速，在非 arm64 机器上则回退到 PyTorch 后端。
+
+> **注意：** 通过 `xcode-select --install` 或 `brew install git` 安装 Git。
+
+### 脚本功能
+
+- 启动时自动检查更新（默认启用，可配置）
+- 自动环境检测（便携 Python 或 uv）
+- 自动安装 `uv`（如需要）
+- 可配置下载源（HuggingFace/ModelScope）
+- 可自定义模型和参数
+
+### 如何修改配置
+
+所有可配置选项均定义为每个脚本顶部的变量。如需自定义，请用文本编辑器打开脚本并修改变量值。
+
+**示例：将界面语言改为中文并使用 1.7B LM 模型**
+
+<table>
+<tr><th>Windows (.bat)</th><th>Linux / macOS (.sh)</th></tr>
+<tr><td>
+
+在 `start_gradio_ui.bat` 中找到以下行：
+```batch
+set LANGUAGE=en
+set LM_MODEL_PATH=--lm_model_path acestep-5Hz-lm-0.6B
+```
+修改为：
+```batch
+set LANGUAGE=zh
+set LM_MODEL_PATH=--lm_model_path acestep-5Hz-lm-1.7B
+```
+
+</td><td>
+
+在 `start_gradio_ui.sh` 中找到以下行：
+```bash
+LANGUAGE="en"
+LM_MODEL_PATH="--lm_model_path acestep-5Hz-lm-0.6B"
+```
+修改为：
+```bash
+LANGUAGE="zh"
+LM_MODEL_PATH="--lm_model_path acestep-5Hz-lm-1.7B"
+```
+
+</td></tr>
+</table>
+
+**示例：禁用启动时更新检查**
+
+<table>
+<tr><th>Windows (.bat)</th><th>Linux / macOS (.sh)</th></tr>
+<tr><td>
+
+```batch
+REM set CHECK_UPDATE=true
+set CHECK_UPDATE=false
+```
+
+</td><td>
+
+```bash
+# CHECK_UPDATE="true"
+CHECK_UPDATE="false"
+```
+
+</td></tr>
+</table>
+
+**示例：启用已注释的选项** —— 删除注释前缀（.bat 用 `REM`，.sh 用 `#`）：
+
+<table>
+<tr><th>Windows (.bat)</th><th>Linux / macOS (.sh)</th></tr>
+<tr><td>
+
+修改前：
+```batch
+REM set SHARE=--share
+```
+修改后：
+```batch
+set SHARE=--share
+```
+
+</td><td>
+
+修改前：
+```bash
+# SHARE="--share"
+```
+修改后：
+```bash
+SHARE="--share"
+```
+
+</td></tr>
+</table>
+
+**常用可配置选项：**
+
+| 选项 | Gradio UI | API 服务器 | 说明 |
+|------|:---------:|:----------:|------|
+| `LANGUAGE` | ✅ | — | 界面语言：`en`、`zh`、`he`、`ja` |
+| `PORT` | ✅ | ✅ | 服务端口（默认：7860 / 8001） |
+| `SERVER_NAME` / `HOST` | ✅ | ✅ | 绑定地址（`127.0.0.1` 或 `0.0.0.0`） |
+| `CHECK_UPDATE` | ✅ | ✅ | 启动时更新检查（`true` / `false`） |
+| `CONFIG_PATH` | ✅ | — | DiT 模型（`acestep-v15-turbo` 等） |
+| `LM_MODEL_PATH` | ✅ | ✅ | LM 模型（`acestep-5Hz-lm-0.6B` / `1.7B` / `4B`） |
+| `DOWNLOAD_SOURCE` | ✅ | ✅ | 下载源（`huggingface` / `modelscope`） |
+| `SHARE` | ✅ | — | 创建公开 Gradio 链接 |
+| `INIT_LLM` | ✅ | — | 强制启用/禁用 LLM（`true` / `false` / `auto`） |
+| `OFFLOAD_TO_CPU` | ✅ | — | 低显存 GPU 的 CPU 卸载 |
+
+### 更新与维护工具
+
+| 脚本（Windows） | 脚本（Linux/macOS） | 用途 |
+|------------------|----------------------|------|
+| `check_update.bat` | `check_update.sh` | 从 GitHub 检查并更新 |
+| `merge_config.bat` | `merge_config.sh` | 更新后合并备份的配置 |
+| `install_uv.bat` | `install_uv.sh` | 安装 uv 包管理器 |
+| `quick_test.bat` | `quick_test.sh` | 测试环境配置 |
+
+**更新工作流：**
+
+```bash
+# Windows                          # Linux / macOS
+check_update.bat                    ./check_update.sh
+merge_config.bat                    ./merge_config.sh
+```
 
 ---
 
@@ -159,7 +358,7 @@ python -m acestep.acestep_v15_pipeline --port 7680
 | RX 7800 XT, RX 7700 XT | `export HSA_OVERRIDE_GFX_VERSION=11.0.1` |
 | RX 7600 | `export HSA_OVERRIDE_GFX_VERSION=11.0.2` |
 
-3. Windows 上使用 `start_gradio_ui_rocm.bat`
+3. Windows 上使用 `start_gradio_ui_rocm.bat` / `start_api_server_rocm.bat`
 4. 验证 ROCm 安装：`rocm-smi`
 
 ### Linux（cachy-os / RDNA4）

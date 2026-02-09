@@ -17,6 +17,7 @@
 
 - [✨ Features](#-features)
 - [⚡ Quick Start](#-quick-start)
+- [🚀 Launch Scripts](#-launch-scripts)
 - [📚 Documentation](#-documentation)
 - [📖 Tutorial](#-tutorial)
 - [🏗️ Architecture](#️-architecture)
@@ -107,6 +108,30 @@ Open http://localhost:7860 (Gradio) or http://localhost:8001 (API).
 | **≥16GB** | `acestep-5Hz-lm-4B` | Best quality and audio understanding |
 
 > 📖 GPU compatibility details: [English](./docs/en/GPU_COMPATIBILITY.md) | [中文](./docs/zh/GPU_COMPATIBILITY.md) | [日本語](./docs/ja/GPU_COMPATIBILITY.md)
+
+## 🚀 Launch Scripts
+
+Ready-to-use launch scripts for all platforms with auto environment detection, update checking, and dependency installation.
+
+| Platform | Scripts | Backend |
+|----------|---------|---------|
+| **Windows** | `start_gradio_ui.bat`, `start_api_server.bat` | CUDA |
+| **Windows (ROCm)** | `start_gradio_ui_rocm.bat`, `start_api_server_rocm.bat` | AMD ROCm |
+| **Linux** | `start_gradio_ui.sh`, `start_api_server.sh` | CUDA |
+| **macOS** | `start_gradio_ui_macos.sh`, `start_api_server_macos.sh` | MLX (Apple Silicon) |
+
+```bash
+# Windows
+start_gradio_ui.bat
+
+# Linux
+chmod +x start_gradio_ui.sh && ./start_gradio_ui.sh
+
+# macOS (Apple Silicon)
+chmod +x start_gradio_ui_macos.sh && ./start_gradio_ui_macos.sh
+```
+
+> 📖 **Script configuration & customization:** [English](./docs/en/INSTALL.md#-launch-scripts) | [中文](./docs/zh/INSTALL.md#-启动脚本) | [日本語](./docs/ja/INSTALL.md#-起動スクリプト)
 
 ## 📚 Documentation
 
