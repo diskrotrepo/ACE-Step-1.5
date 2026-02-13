@@ -11,9 +11,13 @@ dependencies = [
     "torchvision==0.22.1+cu128; sys_platform == 'win32'",
     "torchaudio==2.7.1+cu128; sys_platform == 'win32'",
     # PyTorch for Linux with CUDA 12.8
-    "torch==2.10.0+cu128; sys_platform == 'linux'",
-    "torchvision==0.25.0+cu128; sys_platform == 'linux'",
-    "torchaudio==2.10.0+cu128; sys_platform == 'linux'",
+    "torch==2.10.0+cu128; sys_platform == 'linux' and platform_machine != 'aarch64'",
+    "torchvision==0.25.0+cu128; sys_platform == 'linux' and platform_machine != 'aarch64'",
+    "torchaudio==2.10.0+cu128; sys_platform == 'linux' and platform_machine != 'aarch64'",
+    # PyTorch for Linux with CUDA 13.0 (DGX Spark)(for ARM64 architecture)
+    "torch==2.10.0+cu130; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "torchvision==0.25.0+cu130; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "torchaudio==2.10.0+cu130; sys_platform == 'linux' and platform_machine == 'aarch64'",
     # PyTorch for macOS (CPU / MPS)
     "torch>=2.9.1; sys_platform == 'darwin' and platform_machine == 'arm64'",
     "torchvision; sys_platform == 'darwin' and platform_machine == 'arm64'",
@@ -57,22 +61,33 @@ name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
 [tool.uv]
 required-environments = [
     "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'linux'",
+    "sys_platform == 'win32'",
 ]
 
 [tool.uv.sources]
 nano-vllm = { path = "acestep/third_parts/nano-vllm" }
 torch = [
-    { index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32' or (sys_platform == 'linux' and platform_machine != 'aarch64')" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
 ]
 torchvision = [
-    { index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32' or (sys_platform == 'linux' and platform_machine != 'aarch64')" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
 ]
 torchaudio = [
-    { index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32' or (sys_platform == 'linux' and platform_machine != 'aarch64')" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
 ]
+torchcodec = [ { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" }, ]
 
 [project.scripts]
 acestep = "acestep.acestep_v15_pipeline:main"
