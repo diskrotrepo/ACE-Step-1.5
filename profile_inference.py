@@ -1734,13 +1734,17 @@ def initialize_handlers(
         except ImportError:
             pass
 
+    compile_model = os.environ.get(
+        "ACESTEP_COMPILE_MODEL", ""
+    ).strip().lower() in {"1", "true", "yes", "y", "on"}
+
     print("  Initializing DiT handler...")
     status_dit, success_dit = dit_handler.initialize_service(
         project_root=PROJECT_ROOT,
         config_path=args.config_path,
         device=args.device,  # Pass original device string (handler resolves "auto")
         use_flash_attention=use_flash_attention,
-        compile_model=False,
+        compile_model=compile_model,
         offload_to_cpu=args.offload_to_cpu,
         offload_dit_to_cpu=args.offload_dit_to_cpu,
         quantization=args.quantization,
