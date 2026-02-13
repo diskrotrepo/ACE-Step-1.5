@@ -8,6 +8,7 @@ import sys
 
 from nanovllm.config import Config
 from acestep.debug_utils import debug_start, debug_end
+from nanovllm import distributed as dist_utils
 
 # Debug logging - enable with NANOVLLM_DEBUG=1
 _DEBUG = os.environ.get("NANOVLLM_DEBUG", "0") == "1"
@@ -64,11 +65,15 @@ class ModelRunner:
         self.world_size = config.tensor_parallel_size
         self.rank = rank
         self.event = event
-        dist_port = find_available_port()
-        print(f"[debug]dist_port: {dist_port}")
-        # Use gloo backend on Windows, nccl on Linux/other platforms
-        backend = "gloo" if sys.platform == "win32" else "nccl"
-        dist.init_process_group(backend, f"tcp://127.0.0.1:{dist_port}", world_size=self.world_size, rank=rank)
+        
+        # Only initialize distributed if world_size > 1
+        if self.world_size > 1:
+            dist_port = find_available_port()
+            print(f"[debug]dist_port: {dist_port}")
+            # Use gloo backend on Windows, nccl on Linux/other platforms
+            backend = "gloo" if sys.platform == "win32" else "nccl"
+            dist_utils.initialize_distributed(backend, f"tcp://127.0.0.1:{dist_port}", world_size=self.world_size, rank=rank)
+        
         torch.cuda.set_device(rank)
         default_dtype = torch.get_default_dtype()
         # Use dtype instead of deprecated torch_dtype
@@ -119,9 +124,9 @@ class ModelRunner:
         if self.world_size > 1:
             if rank == 0:
                 self.shm = SharedMemory(name="nanovllm", create=True, size=2**20)
-                dist.barrier()
+                dist_utils.barrier()
             else:
-                dist.barrier()
+                dist_utils.barrier()
                 self.shm = SharedMemory(name="nanovllm")
                 self.loop()
 
@@ -163,13 +168,13 @@ class ModelRunner:
     def exit(self):
         if self.world_size > 1:
             self.shm.close()
-            dist.barrier()
+            dist_utils.barrier()
             if self.rank == 0:
                 self.shm.unlink()
         if not self.enforce_eager:
             del self.graphs, self.graph_pool
         torch.cuda.synchronize()
-        dist.destroy_process_group()
+        dist_utils.destroy_process_group()
 
     def loop(self):
         while True:

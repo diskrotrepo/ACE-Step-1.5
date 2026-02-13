@@ -41,6 +41,7 @@ except ImportError:  # Optional dependency
     load_dotenv = None  # type: ignore
 
 from fastapi import FastAPI, HTTPException, Request, Depends, Header
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
@@ -374,6 +375,8 @@ PARAM_ALIASES = {
     "use_cot_language": ["use_cot_language", "cot_language", "cot-language"],
     "is_format_caption": ["is_format_caption", "isFormatCaption"],
     "allow_lm_batch": ["allow_lm_batch", "allowLmBatch", "parallel_thinking"],
+    "track_name": ["track_name", "trackName"],
+    "track_classes": ["track_classes", "trackClasses", "instruments"],
 }
 
 
@@ -519,6 +522,8 @@ class GenerateMusicRequest(BaseModel):
     use_cot_language: bool = True
     is_format_caption: bool = False
     allow_lm_batch: bool = True
+    track_name: Optional[str] = None
+    track_classes: Optional[List[str]] = None
 
     lm_temperature: float = 0.85
     lm_cfg_scale: float = 2.5
@@ -893,13 +898,33 @@ class RequestParser:
 def _validate_audio_path(path: Optional[str]) -> Optional[str]:
     """Validate a user-supplied audio file path to prevent path traversal attacks.
 
-    Rejects absolute paths and paths containing '..' traversal sequences.
-    Returns the validated path or None if the input is None/empty.
+    Accepts absolute paths strictly only if they are within the system temporary directory.
+    Otherwise, rejects absolute paths and paths containing '..' traversal sequences.
+    
+    Returns the validated, normalized path or None if the input is None/empty.
     Raises HTTPException 400 if the path is unsafe.
     """
     if not path:
         return None
-    # Reject absolute paths (Unix and Windows)
+    
+    # Resolve requested path and system temp path to normalized absolute forms
+    import tempfile
+    system_temp = os.path.realpath(tempfile.gettempdir())
+    requested_path = os.path.realpath(path)
+
+    # SECURE CHECK: Use os.path.commonpath to verify directory boundary integrity.
+    # This prevents prefix bypasses (e.g., /tmp_evil when /tmp is allowed).
+    try:
+        is_in_temp = os.path.commonpath([system_temp, requested_path]) == system_temp
+    except ValueError:
+        # Occurs on Windows if paths are on different drives
+        is_in_temp = False
+
+    if is_in_temp:
+        # Accept server-generated files in temp
+        return requested_path
+
+    # Reject manual absolute paths outside of temp
     if os.path.isabs(path):
         raise HTTPException(status_code=400, detail="absolute audio file paths are not allowed")
     # Reject path traversal via '..' components
@@ -1492,7 +1517,25 @@ def create_app() -> FastAPI:
                 # This matches gradio behavior which uses TASK_INSTRUCTIONS for each task type
                 instruction_to_use = req.instruction
                 if instruction_to_use == DEFAULT_DIT_INSTRUCTION and req.task_type in TASK_INSTRUCTIONS:
-                    instruction_to_use = TASK_INSTRUCTIONS[req.task_type]
+                    raw_instruction = TASK_INSTRUCTIONS[req.task_type]
+                    
+                    if req.task_type == "complete":
+                         #  Use track_classes joined by pipes
+                         if req.track_classes:
+                             # Join list items: ["Drums", "Bass"] -> "DRUMS | BASS"
+                             classes_str = " | ".join([str(t).upper() for t in req.track_classes])
+                             # Use the raw instruction template from constants
+                             # Format: "Complete the track with {TRACK_CLASSES}:"
+                             instruction_to_use = raw_instruction.format(TRACK_CLASSES=classes_str)
+                         else:
+                             # Fallback if no classes provided
+                             instruction_to_use = TASK_INSTRUCTIONS.get("complete_default", raw_instruction)
+
+                    elif "{TRACK_NAME}" in raw_instruction and req.track_name:
+                        # Logic for extract/lego
+                        instruction_to_use = raw_instruction.format(TRACK_NAME=req.track_name.upper())
+                    else:
+                        instruction_to_use = raw_instruction
 
                 # Build GenerationParams using unified interface
                 # Note: thinking controls LM code generation, sample_mode only affects CoT metas
@@ -1542,11 +1585,30 @@ def create_app() -> FastAPI:
 
                 # Build GenerationConfig - default to 2 audios like gradio_ui
                 batch_size = req.batch_size if req.batch_size is not None else 2
+
+                # Resolve seed(s) from req.seed into List[int] for GenerationConfig.seeds
+                resolved_seeds = None
+                if not req.use_random_seed and req.seed is not None:
+                    if isinstance(req.seed, int):
+                        if req.seed >= 0:
+                            resolved_seeds = [req.seed]
+                    elif isinstance(req.seed, str):
+                        resolved_seeds = []
+                        for s in req.seed.split(","):
+                            s = s.strip()
+                            if s and s != "-1":
+                                try:
+                                    resolved_seeds.append(int(float(s)))
+                                except (ValueError, TypeError):
+                                    pass
+                        if not resolved_seeds:
+                            resolved_seeds = None
+
                 config = GenerationConfig(
                     batch_size=batch_size,
                     allow_lm_batch=req.allow_lm_batch,
                     use_random_seed=req.use_random_seed,
-                    seeds=None,  # Let unified logic handle seed generation
+                    seeds=resolved_seeds,
                     audio_format=req.audio_format,
                     constrained_decoding_debug=req.constrained_decoding_debug,
                 )
@@ -2155,6 +2217,16 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="ACE-Step API", version="1.0", lifespan=lifespan)
 
+    # Enable CORS for browser-based frontends (e.g. studio.html opened via file://)
+    # Restricted to localhost origins and the "null" origin (file:// protocol)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["null", "http://localhost", "http://127.0.0.1"],
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
+    )
+
     # Mount OpenRouter-compatible endpoints (/v1/chat/completions, /v1/models)
     from acestep.openrouter_adapter import create_openrouter_router
     openrouter_router = create_openrouter_router(lambda: app.state)
@@ -2185,6 +2257,11 @@ def create_app() -> FastAPI:
             # when callers (multipart/form, url-encoded, raw body) pass them explicitly.
             ref_audio = kwargs.pop("reference_audio_path", None) or p.str("reference_audio_path") or None
             src_audio = kwargs.pop("src_audio_path", None) or p.str("src_audio_path") or None
+
+            t_classes = p.get("track_classes")
+            if t_classes is not None and isinstance(t_classes, str):
+                t_classes = [t_classes]
+
             return GenerateMusicRequest(
                 prompt=p.str("prompt"),
                 lyrics=p.str("lyrics"),
@@ -2209,8 +2286,8 @@ def create_app() -> FastAPI:
                 repainting_end=p.float("repainting_end"),
                 instruction=p.str("instruction", DEFAULT_DIT_INSTRUCTION),
                 audio_cover_strength=p.float("audio_cover_strength", 1.0),
-                reference_audio_path=_validate_audio_path(ref_audio),
-                src_audio_path=_validate_audio_path(src_audio),
+                reference_audio_path=ref_audio,
+                src_audio_path=src_audio,
                 task_type=p.str("task_type", "text2music"),
                 use_adg=p.bool("use_adg"),
                 cfg_interval_start=p.float("cfg_interval_start", 0.0),
@@ -2233,6 +2310,8 @@ def create_app() -> FastAPI:
                 use_cot_language=p.bool("use_cot_language", True),
                 is_format_caption=p.bool("is_format_caption"),
                 allow_lm_batch=p.bool("allow_lm_batch", True),
+                track_name=p.str("track_name"),
+                track_classes=t_classes,
                 **kwargs,
             )
 
@@ -2241,18 +2320,40 @@ def create_app() -> FastAPI:
             if not isinstance(body, dict):
                 raise HTTPException(status_code=400, detail="JSON payload must be an object")
             verify_token_from_request(body, authorization)
-            req = _build_request(RequestParser(body))
+            
+            # Explicitly validate manual string paths from JSON input
+            p = RequestParser(body)
+            req = _build_request(
+                p,
+                reference_audio_path=_validate_audio_path(p.str("reference_audio_path") or None),
+                src_audio_path=_validate_audio_path(p.str("src_audio_path") or None)
+            )
 
         elif content_type.endswith("+json"):
             body = await request.json()
             if not isinstance(body, dict):
                 raise HTTPException(status_code=400, detail="JSON payload must be an object")
             verify_token_from_request(body, authorization)
-            req = _build_request(RequestParser(body))
+            
+            p = RequestParser(body)
+            req = _build_request(
+                p,
+                reference_audio_path=_validate_audio_path(p.str("reference_audio_path") or None),
+                src_audio_path=_validate_audio_path(p.str("src_audio_path") or None)
+            )
 
         elif content_type.startswith("multipart/form-data"):
             form = await request.form()
-            form_dict = {k: v for k, v in form.items() if not hasattr(v, 'read')}
+            
+            # Parse form data correctly to support lists ---
+            form_dict = {}
+            for k in form.keys():
+                vals = [v for v in form.getlist(k) if not hasattr(v, 'read')]
+                if len(vals) == 1:
+                    form_dict[k] = vals[0]
+                elif len(vals) > 1:
+                    form_dict[k] = vals
+
             verify_token_from_request(form_dict, authorization)
 
             # Support both naming conventions: ref_audio/reference_audio, ctx_audio/src_audio
@@ -2275,7 +2376,7 @@ def create_app() -> FastAPI:
                 src_audio_path = _validate_audio_path(str(form.get("ctx_audio_path") or form.get("src_audio_path") or "").strip() or None)
 
             req = _build_request(
-                RequestParser(dict(form)),
+                RequestParser(dict(form_dict)),
                 reference_audio_path=reference_audio_path,
                 src_audio_path=src_audio_path,
             )
@@ -2301,7 +2402,12 @@ def create_app() -> FastAPI:
                     body = json.loads(raw.decode("utf-8"))
                     if isinstance(body, dict):
                         verify_token_from_request(body, authorization)
-                        req = _build_request(RequestParser(body))
+                        p = RequestParser(body)
+                        req = _build_request(
+                            p,
+                            reference_audio_path=_validate_audio_path(p.str("reference_audio_path") or None),
+                            src_audio_path=_validate_audio_path(p.str("src_audio_path") or None)
+                        )
                     else:
                         raise HTTPException(status_code=400, detail="JSON payload must be an object")
                 except HTTPException:

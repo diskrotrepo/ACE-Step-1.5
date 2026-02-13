@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, Depends, Header
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 # Global results directory inside project root
@@ -467,10 +468,30 @@ async def release_task(request: Request, authorization: Optional[str] = Header(N
             lm_negative_prompt=get_param("lm_negative_prompt", default="NO USER INPUT") or "NO USER INPUT",
         )
 
+        # Resolve seed(s) into List[int] for GenerationConfig.seeds
+        use_random_seed = get_param("use_random_seed", default=True)
+        resolved_seeds = None
+        if not use_random_seed:
+            raw_seed = get_param("seed", default=-1)
+            if isinstance(raw_seed, str) and raw_seed.strip():
+                resolved_seeds = []
+                for s in raw_seed.split(","):
+                    s = s.strip()
+                    if s and s != "-1":
+                        try:
+                            resolved_seeds.append(int(float(s)))
+                        except (ValueError, TypeError):
+                            pass
+                if not resolved_seeds:
+                    resolved_seeds = None
+            elif isinstance(raw_seed, (int, float)) and int(raw_seed) >= 0:
+                resolved_seeds = [int(raw_seed)]
+
         config = GenerationConfig(
             batch_size=get_param("batch_size", default=2),
-            use_random_seed=get_param("use_random_seed", default=True),
-            audio_format=get_param("audio_format", default="mp3"),
+            use_random_seed=use_random_seed,
+            seeds=resolved_seeds,
+            audio_format=get_param("audio_format", default="flac"),
         )
 
         # Get output directory
@@ -512,6 +533,38 @@ async def release_task(request: Request, authorization: Optional[str] = Header(N
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Origins that are expected to call the API:
+#  - "null"                     → studio.html opened via file:// protocol
+#  - http://localhost:*         → local dev servers / Gradio UI
+#  - http://127.0.0.1:*        → same, numeric form
+_CORS_KWARGS = dict(
+    allow_origins=["null", "http://localhost", "http://127.0.0.1"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
+
+def _add_cors_middleware(app):
+    """Add CORS middleware so browser-based frontends (e.g. studio.html via file://) can call the API."""
+    app.add_middleware(CORSMiddleware, **_CORS_KWARGS)
+
+
+def _add_cors_middleware_post_launch(app):
+    """Wrap an already-started app's middleware stack with CORS.
+
+    ``add_middleware`` raises after Starlette has started, so we patch the
+    compiled middleware stack directly instead.
+    """
+    from starlette.middleware.cors import CORSMiddleware as _CORSImpl
+
+    if app.middleware_stack is not None:
+        app.middleware_stack = _CORSImpl(app=app.middleware_stack, **_CORS_KWARGS)
+    else:
+        # App hasn't built its stack yet – safe to use the normal path
+        _add_cors_middleware(app)
+
+
 def setup_api_routes_to_app(app, dit_handler, llm_handler, api_key: Optional[str] = None):
     """
     Mount API routes to a FastAPI application (for use with gr.mount_gradio_app)
@@ -523,6 +576,7 @@ def setup_api_routes_to_app(app, dit_handler, llm_handler, api_key: Optional[str
         api_key: Optional API key for authentication
     """
     set_api_key(api_key)
+    _add_cors_middleware(app)
     app.state.dit_handler = dit_handler
     app.state.llm_handler = llm_handler
     app.include_router(router)
@@ -540,6 +594,7 @@ def setup_api_routes(demo, dit_handler, llm_handler, api_key: Optional[str] = No
     """
     set_api_key(api_key)
     app = demo.app
+    _add_cors_middleware_post_launch(app)
     app.state.dit_handler = dit_handler
     app.state.llm_handler = llm_handler
     app.include_router(router)
