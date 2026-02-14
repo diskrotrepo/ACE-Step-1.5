@@ -80,8 +80,9 @@ class ModelRunner:
         # Detect GPU compute capability to determine bfloat16 support
         # Bfloat16 requires Ampere (compute capability >= 8.0) or newer
         gpu_props = torch.cuda.get_device_properties(rank)
-        compute_capability = gpu_props.major + gpu_props.minor / 10.0
-        supports_bfloat16 = compute_capability >= 8.0
+        # Use tuple comparison to handle compute capability correctly
+        # (e.g., 7.5 < 8.0, 8.0 >= 8.0, 8.6 >= 8.0, etc.)
+        supports_bfloat16 = (gpu_props.major, gpu_props.minor) >= (8, 0)
         
         # Use dtype instead of deprecated torch_dtype
         config_dtype = getattr(hf_config, 'dtype', getattr(hf_config, 'torch_dtype', torch.bfloat16))
