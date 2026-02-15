@@ -10,6 +10,8 @@ from .conditioning_text import ConditioningTextMixin
 from .diffusion import DiffusionMixin
 from .init_service import InitServiceMixin
 from .io_audio import IoAudioMixin
+from .lyric_score import LyricScoreMixin
+from .lyric_timestamp import LyricTimestampMixin
 from .lora_manager import LoraManagerMixin
 from .memory_utils import MemoryUtilsMixin
 from .metadata_utils import MetadataMixin
@@ -29,6 +31,8 @@ __all__ = [
     "DiffusionMixin",
     "InitServiceMixin",
     "IoAudioMixin",
+    "LyricScoreMixin",
+    "LyricTimestampMixin",
     "LoraManagerMixin",
     "MemoryUtilsMixin",
     "MetadataMixin",
