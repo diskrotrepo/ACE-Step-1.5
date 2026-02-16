@@ -320,12 +320,25 @@ def get_checkpoints_dir(custom_dir: Optional[str] = None) -> Path:
     return get_project_root() / "checkpoints"
 
 
+def _has_weight_files(directory: Path) -> bool:
+    """Check if a directory contains model weight files (.safetensors or .bin)."""
+    if not directory.exists():
+        return False
+    return any(
+        f.suffix in ('.safetensors', '.bin')
+        for f in directory.iterdir()
+        if f.is_file()
+    )
+
+
 def check_main_model_exists(checkpoints_dir: Optional[Path] = None) -> bool:
     """
     Check if the main model components exist in the checkpoints directory.
-    
+    Verifies that each component directory contains actual weight files,
+    not just config or code files from an incomplete download.
+
     Returns:
-        True if all main model components exist, False otherwise.
+        True if all main model components exist with weight files, False otherwise.
     """
     if checkpoints_dir is None:
         checkpoints_dir = get_checkpoints_dir()
@@ -334,7 +347,7 @@ def check_main_model_exists(checkpoints_dir: Optional[Path] = None) -> bool:
 
     for component in MAIN_MODEL_COMPONENTS:
         component_path = checkpoints_dir / component
-        if not component_path.exists():
+        if not component_path.exists() or not _has_weight_files(component_path):
             return False
     return True
 
@@ -342,13 +355,15 @@ def check_main_model_exists(checkpoints_dir: Optional[Path] = None) -> bool:
 def check_model_exists(model_name: str, checkpoints_dir: Optional[Path] = None) -> bool:
     """
     Check if a specific model exists in the checkpoints directory.
-    
+    Verifies that the model directory contains actual weight files,
+    not just config or code files from an incomplete download.
+
     Args:
         model_name: Name of the model to check
         checkpoints_dir: Custom checkpoints directory (optional)
-    
+
     Returns:
-        True if the model exists, False otherwise.
+        True if the model exists with weight files, False otherwise.
     """
     if not model_name:
         logger.warning("[check_model_exists] Empty model_name; treating as missing.")
@@ -359,7 +374,7 @@ def check_model_exists(model_name: str, checkpoints_dir: Optional[Path] = None) 
         checkpoints_dir = Path(checkpoints_dir)
 
     model_path = checkpoints_dir / model_name
-    return model_path.exists()
+    return model_path.exists() and _has_weight_files(model_path)
 
 
 def list_available_models() -> Dict[str, str]:

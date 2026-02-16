@@ -180,10 +180,18 @@ def _ensure_model_downloaded(model_name: str, checkpoint_dir: str) -> str:
     """
     model_path = os.path.join(checkpoint_dir, model_name)
 
-    # Check if model already exists
+    # Check if model already exists with actual weight files
     if os.path.exists(model_path) and os.listdir(model_path):
-        print(f"[Model Download] Model {model_name} already exists at {model_path}")
-        return model_path
+        has_weights = any(
+            f.endswith(('.safetensors', '.bin'))
+            for f in os.listdir(model_path)
+            if os.path.isfile(os.path.join(model_path, f))
+        )
+        if has_weights:
+            print(f"[Model Download] Model {model_name} already exists at {model_path}")
+            return model_path
+        else:
+            print(f"[Model Download] Model {model_name} found but missing weight files, re-downloading...")
 
     # Get repository ID
     repo_id = MODEL_REPO_MAPPING.get(model_name, DEFAULT_REPO_ID)
@@ -1213,12 +1221,38 @@ def create_app() -> FastAPI:
     INITIAL_AVG_JOB_SECONDS = float(os.getenv("ACESTEP_AVG_JOB_SECONDS", "5.0"))
     AVG_WINDOW = int(os.getenv("ACESTEP_AVG_WINDOW", "50"))
 
+    _gcs_bucket_name = os.getenv("ACESTEP_GCS_BUCKET", "")
+    _gcs_public_base = os.getenv("ACESTEP_GCS_PUBLIC_URL", "")  # e.g. https://studio.diskrot.com
+    _gcs_client = None
+
+    def _upload_to_gcs(local_path: str) -> str:
+        """Upload a local file to GCS and return its public URL."""
+        nonlocal _gcs_client
+        from google.cloud import storage
+
+        if _gcs_client is None:
+            _gcs_client = storage.Client()
+        bucket = _gcs_client.bucket(_gcs_bucket_name)
+        blob_name = f"audio/{os.path.basename(local_path)}"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_filename(local_path)
+        return f"{_gcs_public_base}/{blob_name}"
+
     def _path_to_audio_url(path: str) -> str:
-        """Convert local file path to downloadable relative URL"""
+        """Convert local file path to downloadable URL.
+
+        When ACESTEP_GCS_BUCKET is set, uploads the file to GCS and returns
+        the public URL.  Otherwise returns a relative ``/v1/audio`` URL.
+        """
         if not path:
             return path
         if path.startswith("http://") or path.startswith("https://"):
             return path
+        if _gcs_bucket_name:
+            try:
+                return _upload_to_gcs(path)
+            except Exception as e:
+                logger.error(f"[GCS] Upload failed for {path}: {e}")
         encoded_path = urllib.parse.quote(path, safe="")
         return f"/v1/audio?path={encoded_path}"
 
