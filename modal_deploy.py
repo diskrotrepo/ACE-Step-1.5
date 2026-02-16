@@ -44,7 +44,9 @@ def _download_models():
 # Container image
 # ---------------------------------------------------------------------------
 image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.from_registry(
+        "nvidia/cuda:12.8.0-devel-ubuntu22.04", add_python="3.11",
+    )
     .apt_install("git", "ffmpeg", "libsndfile1")
     .pip_install(
         # PyTorch + CUDA 12.8 (Linux x86_64)
@@ -81,16 +83,16 @@ image = (
         "xxhash",
         "huggingface_hub",
         "python-dotenv",
-        # nano-vllm deps
         "triton>=3.0.0",
-        "flash-attn",
         # Gradio (needed even for API due to import chains)
         "gradio==6.2.0",
         # GCS upload
         "google-cloud-storage",
     )
+    # flash-attn 2.8.3 doesn't support torch 2.10 yet (max 2.9).
+    # PyTorch's built-in SDPA uses the same FlashAttention kernels on A100.
     # Copy the entire project into the image
-    .add_local_dir(".", remote_path="/app", ignore=[
+    .add_local_dir(".", remote_path="/app", copy=True, ignore=[
         ".git", "__pycache__", "*.pyc", ".DS_Store",
         "checkpoints", ".cache", "*.log", ".venv", "venv",
     ])
@@ -120,6 +122,8 @@ image = (
         # Disable torch.compile — avoids multi-minute first-inference warmup.
         # A100 is fast enough without it; the cold-start savings are worth more.
         "ACESTEP_COMPILE_MODEL": "false",
+        # Use PyTorch native SDPA instead of flash-attn package
+        "ACESTEP_USE_FLASH_ATTENTION": "false",
         # GCS output
         "ACESTEP_GCS_BUCKET": GCS_BUCKET,
         "ACESTEP_GCS_PUBLIC_URL": f"https://{GCS_BUCKET}",
