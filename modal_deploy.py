@@ -45,7 +45,8 @@ def _download_models():
 # ---------------------------------------------------------------------------
 image = (
     modal.Image.from_registry(
-        "nvidia/cuda:12.8.0-devel-ubuntu22.04", add_python="3.11",
+        "nvidia/cuda:12.8.0-devel-ubuntu22.04",
+        add_python="3.11",
     )
     .apt_install("git", "ffmpeg", "libsndfile1")
     .pip_install(
@@ -92,10 +93,22 @@ image = (
     # flash-attn 2.8.3 doesn't support torch 2.10 yet (max 2.9).
     # PyTorch's built-in SDPA uses the same FlashAttention kernels on A100.
     # Copy the entire project into the image
-    .add_local_dir(".", remote_path="/app", copy=True, ignore=[
-        ".git", "__pycache__", "*.pyc", ".DS_Store",
-        "checkpoints", ".cache", "*.log", ".venv", "venv",
-    ])
+    .add_local_dir(
+        ".",
+        remote_path="/app",
+        copy=True,
+        ignore=[
+            ".git",
+            "__pycache__",
+            "*.pyc",
+            ".DS_Store",
+            "checkpoints",
+            ".cache",
+            "*.log",
+            ".venv",
+            "venv",
+        ],
+    )
     # Install nano-vllm from vendored source and the project itself
     .run_commands(
         "pip install -e /app/acestep/third_parts/nano-vllm",
@@ -109,25 +122,27 @@ image = (
     .run_commands(
         "python -c 'import triton; import torch; print(\"triton+torch imported\")'",
     )
-    .env({
-        "ACESTEP_CONFIG_PATH": "acestep-v15-turbo",
-        "ACESTEP_LM_MODEL_PATH": "acestep-5Hz-lm-1.7B",
-        "ACESTEP_LM_BACKEND": "vllm",
-        "ACESTEP_INIT_LLM": "true",
-        "ACESTEP_DEVICE": "cuda",
-        "ACESTEP_DOWNLOAD_SOURCE": "huggingface",
-        "ACESTEP_API_HOST": "0.0.0.0",
-        "ACESTEP_API_PORT": "8001",
-        "ACESTEP_NO_INIT": "false",
-        # Disable torch.compile — avoids multi-minute first-inference warmup.
-        # A100 is fast enough without it; the cold-start savings are worth more.
-        "ACESTEP_COMPILE_MODEL": "false",
-        # Use PyTorch native SDPA instead of flash-attn package
-        "ACESTEP_USE_FLASH_ATTENTION": "false",
-        # GCS output
-        "ACESTEP_GCS_BUCKET": GCS_BUCKET,
-        "ACESTEP_GCS_PUBLIC_URL": f"https://{GCS_BUCKET}",
-    })
+    .env(
+        {
+            "ACESTEP_CONFIG_PATH": "acestep-v15-turbo",
+            "ACESTEP_LM_MODEL_PATH": "acestep-5Hz-lm-1.7B",
+            "ACESTEP_LM_BACKEND": "vllm",
+            "ACESTEP_INIT_LLM": "true",
+            "ACESTEP_DEVICE": "cuda",
+            "ACESTEP_DOWNLOAD_SOURCE": "huggingface",
+            "ACESTEP_API_HOST": "0.0.0.0",
+            "ACESTEP_API_PORT": "8001",
+            "ACESTEP_NO_INIT": "false",
+            # Disable torch.compile — avoids multi-minute first-inference warmup.
+            # A100 is fast enough without it; the cold-start savings are worth more.
+            "ACESTEP_COMPILE_MODEL": "false",
+            # Use PyTorch native SDPA instead of flash-attn package
+            "ACESTEP_USE_FLASH_ATTENTION": "false",
+            # GCS output
+            "ACESTEP_GCS_BUCKET": GCS_BUCKET,
+            "ACESTEP_GCS_PUBLIC_URL": f"https://storage.googleapis.com/{GCS_BUCKET}",
+        }
+    )
 )
 
 
@@ -170,7 +185,9 @@ class Server:
                 return await call_next(request)
             api_key = os.environ.get("MODAL_API_KEY")
             if api_key and request.headers.get("X-Modal-Api-Key") != api_key:
-                return JSONResponse(status_code=403, content={"detail": "Invalid API key"})
+                return JSONResponse(
+                    status_code=403, content={"detail": "Invalid API key"}
+                )
             return await call_next(request)
 
         return fastapi_app
