@@ -2512,6 +2512,7 @@ def create_app() -> FastAPI:
                 t_classes = [t_classes]
 
             return GenerateMusicRequest(
+                user_id=p.str("user_id") or "",
                 prompt=p.str("prompt"),
                 lyrics=p.str("lyrics"),
                 thinking=p.bool("thinking"),
