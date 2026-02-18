@@ -20,7 +20,7 @@ import modal
 
 REPO_ID = "ACE-Step/Ace-Step1.5"
 MODEL_DIR = "/app/checkpoints"
-GPU = modal.gpu.A100(size="40GB")
+GPU = "A100-40GB"
 GCS_BUCKET = "studio.diskrot.com"
 
 GCS_SECRET = modal.Secret.from_name("gcs-credentials")
@@ -154,9 +154,9 @@ image = (
     gpu=GPU,
     secrets=[GCS_SECRET, API_KEY_SECRET],
     timeout=600,
-    container_idle_timeout=300,
-    allow_concurrent_inputs=15,
+    scaledown_window=300,
 )
+@modal.concurrent(max_inputs=15)
 class Server:
     @modal.enter()
     def setup_gcs_credentials(self):

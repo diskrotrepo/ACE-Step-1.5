@@ -543,6 +543,9 @@ class GenerateMusicRequest(BaseModel):
     lm_repetition_penalty: float = 1.0
     lm_negative_prompt: str = "NO USER INPUT"
 
+    # Caller identity – GCS uploads are stored under ``<user_id>/audio/``.
+    user_id: str = Field(description="Caller user ID for per-user GCS storage")
+
     class Config:
         allow_population_by_field_name = True
         allow_population_by_alias = True
@@ -1225,7 +1228,7 @@ def create_app() -> FastAPI:
     _gcs_public_base = os.getenv("ACESTEP_GCS_PUBLIC_URL", "")  # e.g. https://studio.diskrot.com
     _gcs_client = None
 
-    def _upload_to_gcs(local_path: str) -> str:
+    def _upload_to_gcs(local_path: str, user_id: str) -> str:
         """Upload a local file to GCS and return its public URL."""
         nonlocal _gcs_client
         from google.cloud import storage
@@ -1233,12 +1236,12 @@ def create_app() -> FastAPI:
         if _gcs_client is None:
             _gcs_client = storage.Client()
         bucket = _gcs_client.bucket(_gcs_bucket_name)
-        blob_name = f"audio/{os.path.basename(local_path)}"
+        blob_name = f"{user_id}/audio/{os.path.basename(local_path)}"
         blob = bucket.blob(blob_name)
         blob.upload_from_filename(local_path)
         return f"{_gcs_public_base}/{blob_name}"
 
-    def _path_to_audio_url(path: str) -> str:
+    def _path_to_audio_url(path: str, user_id: str = "") -> str:
         """Convert local file path to downloadable URL.
 
         When ACESTEP_GCS_BUCKET is set, uploads the file to GCS and returns
@@ -1250,7 +1253,7 @@ def create_app() -> FastAPI:
             return path
         if _gcs_bucket_name:
             try:
-                return _upload_to_gcs(path)
+                return _upload_to_gcs(path, user_id=user_id)
             except Exception as e:
                 logger.error(f"[GCS] Upload failed for {path}: {e}")
         encoded_path = urllib.parse.quote(path, safe="")
@@ -2082,10 +2085,11 @@ def create_app() -> FastAPI:
                 # Use selected_model_name (set at the beginning of _run_one_job)
                 dit_model_name = selected_model_name
 
+                _uid = req.user_id
                 return {
-                    "first_audio_path": _path_to_audio_url(first_audio) if first_audio else None,
-                    "second_audio_path": _path_to_audio_url(second_audio) if second_audio else None,
-                    "audio_paths": [_path_to_audio_url(p) for p in audio_paths],
+                    "first_audio_path": _path_to_audio_url(first_audio, user_id=_uid) if first_audio else None,
+                    "second_audio_path": _path_to_audio_url(second_audio, user_id=_uid) if second_audio else None,
+                    "audio_paths": [_path_to_audio_url(p, user_id=_uid) for p in audio_paths],
                     "raw_audio_paths": list(audio_paths),
                     "generation_info": generation_info,
                     "status_message": result.status_message,
