@@ -1118,17 +1118,51 @@ class RequestParser:
         return _to_bool(self.get(name), default)
 
 
+def _download_gcs_to_temp(gs_url: str) -> str:
+    """Download a gs:// URL to a local temp file and return the local path."""
+    from google.cloud import storage as gcs_storage
+
+    # Parse gs://bucket/blob_path
+    without_scheme = gs_url[len("gs://"):]
+    bucket_name, _, blob_path = without_scheme.partition("/")
+    if not bucket_name or not blob_path:
+        raise HTTPException(status_code=400, detail=f"Invalid GCS URL: {gs_url}")
+
+    suffix = os.path.splitext(blob_path)[1] or ".wav"
+    fd, local_path = tempfile.mkstemp(prefix="gcs_audio_", suffix=suffix)
+    os.close(fd)
+    try:
+        client = gcs_storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.download_to_filename(local_path)
+        logger.info(f"[GCS] Downloaded {gs_url} -> {local_path}")
+        return local_path
+    except Exception:
+        # Clean up temp file on failure
+        try:
+            os.unlink(local_path)
+        except OSError:
+            pass
+        raise
+
+
 def _validate_audio_path(path: Optional[str]) -> Optional[str]:
     """Validate a user-supplied audio file path to prevent path traversal attacks.
 
     Accepts absolute paths strictly only if they are within the system temporary directory.
     Otherwise, rejects absolute paths and paths containing '..' traversal sequences.
+    GCS URLs (gs://) are downloaded to a local temp file and the local path is returned.
 
     Returns the validated, normalized path or None if the input is None/empty.
     Raises HTTPException 400 if the path is unsafe.
     """
     if not path:
         return None
+
+    # Handle GCS URLs by downloading to a local temp file
+    if path.startswith("gs://"):
+        return _download_gcs_to_temp(path)
 
     # Resolve requested path and system temp path to normalized absolute forms
     import tempfile
