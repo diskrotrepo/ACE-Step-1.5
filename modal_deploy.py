@@ -107,6 +107,8 @@ image = (
             "*.log",
             ".venv",
             "venv",
+            "acestep_output",
+            "my_dataset",
         ],
     )
     # Install nano-vllm from vendored source and the project itself
@@ -141,6 +143,9 @@ image = (
             # GCS output
             "ACESTEP_GCS_BUCKET": GCS_BUCKET,
             "ACESTEP_GCS_PUBLIC_URL": f"https://storage.googleapis.com/{GCS_BUCKET}",
+            # Auto-load LoRA adapter(s) on startup
+            # Comma-separated, optional "name=path" syntax
+            "ACESTEP_LORA_PATH": "alexayers=/app/loras/alexayers/final",
         }
     )
 )

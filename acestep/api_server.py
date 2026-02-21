@@ -2326,6 +2326,31 @@ def create_app() -> FastAPI:
             app.state._initialized = True
             print(f"[API Server] Primary model loaded: {_get_model_name(config_path)}")
 
+            # Auto-load LoRA adapter(s) if configured
+            # Supports comma-separated paths, e.g. "/app/loras/jazz,/app/loras/metal"
+            # Optional name via "name=path" syntax, e.g. "jazz=/app/loras/jazz"
+            lora_paths_raw = os.getenv("ACESTEP_LORA_PATH", "").strip()
+            if lora_paths_raw:
+                for entry in lora_paths_raw.split(","):
+                    entry = entry.strip()
+                    if not entry:
+                        continue
+                    if "=" in entry:
+                        adapter_name, lora_path = entry.split("=", 1)
+                        adapter_name = adapter_name.strip()
+                        lora_path = lora_path.strip()
+                    else:
+                        adapter_name = None
+                        lora_path = entry
+                    if os.path.isdir(lora_path):
+                        try:
+                            result = handler.add_lora(lora_path, adapter_name=adapter_name)
+                            print(f"[API Server] LoRA adapter loaded: {result}")
+                        except Exception as e:
+                            print(f"[API Server] Warning: Failed to auto-load LoRA '{lora_path}': {e}")
+                    else:
+                        print(f"[API Server] Warning: ACESTEP_LORA_PATH not found: {lora_path}")
+
             # Initialize secondary model if configured
             if handler2 and config_path2:
                 model2_name = _get_model_name(config_path2)
