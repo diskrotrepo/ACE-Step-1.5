@@ -645,6 +645,7 @@ def generate_music(
 
         # Build audios list for GenerationResult with params and save files
         # Audio saving and UUID generation handled here, outside of handler
+
         audios = []
         for idx, dit_audio in enumerate(dit_audios):
             # Create a copy of params dict for this audio
