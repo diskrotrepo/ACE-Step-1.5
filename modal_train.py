@@ -124,7 +124,7 @@ image = (
     )
     .run_commands(
         "pip install -e /app/acestep/third_parts/nano-vllm",
-        "pip install -e /app",
+        "pip install -e /app --extra-index-url https://download.pytorch.org/whl/cu128",
     )
     # Bake model weights into image layer (cached after first build)
     .run_function(_download_models)

@@ -17,7 +17,6 @@ import torch
 import torch.nn as nn
 
 from acestep.training.lora_utils import (
-    _unwrap_decoder,
     load_training_checkpoint,
     save_lora_weights,
 )
@@ -26,6 +25,16 @@ from acestep.training.lokr_utils import (
     load_lokr_weights,
 )
 from acestep.training_v2.ui import TrainingUpdate
+
+
+def _unwrap_decoder(model: nn.Module) -> nn.Module:
+    """Return the decoder, unwrapping any Lightning Fabric wrappers."""
+    decoder = getattr(model, "decoder", model)
+    while hasattr(decoder, "_forward_module") and isinstance(
+        getattr(decoder, "_forward_module"), nn.Module
+    ):
+        decoder = decoder._forward_module
+    return decoder
 
 logger = logging.getLogger(__name__)
 
